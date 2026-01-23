@@ -43,22 +43,20 @@
       padding: 10px;
     }
   </style>
-
-  <script src="./pdf.js"></script>
 </head>
 
 <body>
 
   <div id="toolbar">
-    <button onclick="prevPage()">◀</button>
+    <button id="prevBtn" type="button">◀</button>
     <span id="pageInfo">Loading…</span>
-    <button onclick="nextPage()">▶</button>
+    <button id="nextBtn" type="button">▶</button>
   </div>
 
   <div id="pdfContainer">
     <canvas id="pdfCanvas"></canvas>
   </div>
 
-  <script src="./viewer.js"></script>
+  <script type="module" src="./viewer.js"></script>
 </body>
 </html>
