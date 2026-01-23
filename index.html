@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Learnverse PDF Viewer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <style>
+    body {
+      margin: 0;
+      background: #0e1a2b;
+      color: white;
+      font-family: Arial, sans-serif;
+    }
+
+    #toolbar {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 12px;
+      padding: 10px;
+      background: #12263a;
+      position: sticky;
+      top: 0;
+    }
+
+    button {
+      padding: 6px 12px;
+      background: #1e90ff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    #pageInfo {
+      font-size: 14px;
+    }
+
+    #pdfContainer {
+      display: flex;
+      justify-content: center;
+      padding: 10px;
+    }
+  </style>
+
+  <script src="./pdf.js"></script>
+</head>
+
+<body>
+
+  <div id="toolbar">
+    <button onclick="prevPage()">◀</button>
+    <span id="pageInfo">Loading…</span>
+    <button onclick="nextPage()">▶</button>
+  </div>
+
+  <div id="pdfContainer">
+    <canvas id="pdfCanvas"></canvas>
+  </div>
+
+  <script src="./viewer.js"></script>
+</body>
+</html>
