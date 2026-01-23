@@ -1,22 +1,39 @@
+import { GlobalWorkerOptions, getDocument } from "./pdf.mjs";
+
 const params = new URLSearchParams(window.location.search);
 const pdfUrl = params.get("pdf");
 
 let pdfDoc = null;
 let currentPage = 1;
 let totalPages = 0;
-let canvas = document.getElementById("pdfCanvas");
-let ctx = canvas.getContext("2d");
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = "./pdf.worker.js";
+const canvas = document.getElementById("pdfCanvas");
+const ctx = canvas.getContext("2d");
 
-// Load PDF
-pdfjsLib.getDocument(pdfUrl).promise.then(pdf => {
-  pdfDoc = pdf;
-  totalPages = pdf.numPages;
+const pageInfoEl = document.getElementById("pageInfo");
+const prevBtn = document.getElementById("prevBtn");
+const nextBtn = document.getElementById("nextBtn");
 
-  renderPage(currentPage);
-  notifyUnity("PDF_LOADED");
-});
+GlobalWorkerOptions.workerSrc = new URL("./pdf.worker.mjs", import.meta.url).toString();
+
+if (!pdfUrl) {
+  pageInfoEl.innerText = "Missing ?pdf=... URL parameter";
+} else {
+  // Load PDF
+  getDocument(pdfUrl).promise
+    .then(pdf => {
+      pdfDoc = pdf;
+      totalPages = pdf.numPages;
+
+      renderPage(currentPage);
+      notifyUnity("PDF_LOADED");
+    })
+    .catch(err => {
+      console.error(err);
+      pageInfoEl.innerText = "Failed to load PDF";
+      notifyUnity("PDF_ERROR");
+    });
+}
 
 // Render page
 function renderPage(pageNumber) {
@@ -39,8 +56,10 @@ function renderPage(pageNumber) {
 
 // UI update
 function updateUI() {
-  document.getElementById("pageInfo").innerText =
-    `Page ${currentPage} / ${totalPages}`;
+  pageInfoEl.innerText = `Page ${currentPage} / ${totalPages}`;
+
+  if (prevBtn) prevBtn.disabled = currentPage <= 1;
+  if (nextBtn) nextBtn.disabled = currentPage >= totalPages;
 }
 
 // Navigation
@@ -61,6 +80,14 @@ function goToPage(page) {
     renderPage(page);
   }
 }
+
+if (prevBtn) prevBtn.addEventListener("click", prevPage);
+if (nextBtn) nextBtn.addEventListener("click", nextPage);
+
+// Expose navigation for external callers (e.g., Unity)
+window.nextPage = nextPage;
+window.prevPage = prevPage;
+window.goToPage = goToPage;
 
 // 🔁 JS → Unity (Vuplex bridge)
 function notifyUnity(eventType) {
