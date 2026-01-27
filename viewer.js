@@ -33,6 +33,8 @@ if (!pdfUrl) {
       pageInfoEl.innerText = "Failed to load PDF";
       notifyUnity("PDF_ERROR");
     });
+    
+    console.log("PDF viewer loaded");
 }
 
 // Render page
@@ -93,12 +95,33 @@ window.goToPage = goToPage;
 function notifyUnity(eventType) {
   const payload = {
     type: eventType,
-    currentPage: currentPage,
-    totalPages: totalPages,
-    pdfUrl: pdfUrl
+    currentPage,
+    totalPages,
+    pdfUrl
   };
 
-  if (window.vuplex) {
-    window.vuplex.postMessage(JSON.stringify(payload));
+  console.log("Sending to Unity:", payload);
+  const message = JSON.stringify(payload);
+
+  // Vuplex (most platforms)
+  if (window.vuplex && window.vuplex.postMessage) {
+    window.vuplex.postMessage(message);
+    return;
   }
+
+  // Android fallback
+  if (window.chrome && window.chrome.webview) {
+    window.chrome.webview.postMessage(message);
+    return;
+  }
+
+  // iOS WKWebView fallback
+  if (window.webkit &&
+      window.webkit.messageHandlers &&
+      window.webkit.messageHandlers.vuplex) {
+    window.webkit.messageHandlers.vuplex.postMessage(message);
+    return;
+  }
+
+  console.warn("No WebView bridge found");
 }
