@@ -92,6 +92,34 @@ window.prevPage = prevPage;
 window.goToPage = goToPage;
 
 // 🔁 JS → Unity (Vuplex bridge) — no-op when not in a WebView
+
+// Vuplex injects window.vuplex shortly after load; wait for it before sending.
+function whenVuplexReady(callback) {
+  if (window.vuplex && window.vuplex.postMessage) {
+    callback();
+    return;
+  }
+  window.addEventListener("vuplexready", callback, { once: true });
+}
+
+function sendToUnity(message) {
+  const payload = JSON.parse(message);
+  if (window.vuplex?.postMessage) {
+    console.log("Sending to Unity:", payload);
+    window.vuplex.postMessage(message);
+    return;
+  }
+  if (window.chrome?.webview) {
+    console.log("Sending to Unity:", payload);
+    window.chrome.webview.postMessage(message);
+    return;
+  }
+  if (window.webkit?.messageHandlers?.vuplex) {
+    console.log("Sending to Unity:", payload);
+    window.webkit.messageHandlers.vuplex.postMessage(message);
+  }
+}
+
 function notifyUnity(eventType) {
   const payload = {
     type: eventType,
@@ -101,28 +129,11 @@ function notifyUnity(eventType) {
   };
   const message = JSON.stringify(payload);
 
-  // Vuplex (most platforms)
-  if (window.vuplex && window.vuplex.postMessage) {
-    console.log("Sending to Unity:", payload);
-    window.vuplex.postMessage(message);
+  // Android / iOS bridges are available immediately; send now.
+  if (window.chrome?.webview || window.webkit?.messageHandlers?.vuplex) {
+    sendToUnity(message);
     return;
   }
-
-  // Android fallback
-  if (window.chrome && window.chrome.webview) {
-    console.log("Sending to Unity:", payload);
-    window.chrome.webview.postMessage(message);
-    return;
-  }
-
-  // iOS WKWebView fallback
-  if (window.webkit &&
-      window.webkit.messageHandlers &&
-      window.webkit.messageHandlers.vuplex) {
-    console.log("Sending to Unity:", payload);
-    window.webkit.messageHandlers.vuplex.postMessage(message);
-    return;
-  }
-
-  // Not in a WebView (e.g. opened in browser) — skip quietly
+  // Vuplex injects window.vuplex shortly after load — wait for vuplexready.
+  whenVuplexReady(() => sendToUnity(message));
 }
