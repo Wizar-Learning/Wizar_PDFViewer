@@ -91,7 +91,7 @@ window.nextPage = nextPage;
 window.prevPage = prevPage;
 window.goToPage = goToPage;
 
-// 🔁 JS → Unity (Vuplex bridge)
+// 🔁 JS → Unity (Vuplex bridge) — no-op when not in a WebView
 function notifyUnity(eventType) {
   const payload = {
     type: eventType,
@@ -99,18 +99,18 @@ function notifyUnity(eventType) {
     totalPages,
     pdfUrl
   };
-
-  console.log("Sending to Unity:", payload);
   const message = JSON.stringify(payload);
 
   // Vuplex (most platforms)
   if (window.vuplex && window.vuplex.postMessage) {
+    console.log("Sending to Unity:", payload);
     window.vuplex.postMessage(message);
     return;
   }
 
   // Android fallback
   if (window.chrome && window.chrome.webview) {
+    console.log("Sending to Unity:", payload);
     window.chrome.webview.postMessage(message);
     return;
   }
@@ -119,9 +119,10 @@ function notifyUnity(eventType) {
   if (window.webkit &&
       window.webkit.messageHandlers &&
       window.webkit.messageHandlers.vuplex) {
+    console.log("Sending to Unity:", payload);
     window.webkit.messageHandlers.vuplex.postMessage(message);
     return;
   }
 
-  console.warn("No WebView bridge found");
+  // Not in a WebView (e.g. opened in browser) — skip quietly
 }
