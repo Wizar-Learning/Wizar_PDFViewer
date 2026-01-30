@@ -6,11 +6,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
   <style>
-    body {
+    html, body {
       margin: 0;
+      height: 100%;
       background: #0e1a2b;
       color: white;
       font-family: Arial, sans-serif;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
     }
 
     #toolbar {
@@ -38,9 +44,13 @@
     }
 
     #pdfContainer {
+      flex: 1;
+      min-height: 0;
       display: flex;
       justify-content: center;
+      align-items: flex-start;
       padding: 10px;
+      overflow: auto;
     }
   </style>
 </head>

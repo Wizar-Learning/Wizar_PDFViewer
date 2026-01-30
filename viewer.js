@@ -13,6 +13,7 @@ const ctx = canvas.getContext("2d");
 const pageInfoEl = document.getElementById("pageInfo");
 const prevBtn = document.getElementById("prevBtn");
 const nextBtn = document.getElementById("nextBtn");
+const pdfContainer = document.getElementById("pdfContainer");
 
 GlobalWorkerOptions.workerSrc = new URL("./pdf.worker.mjs", import.meta.url).toString();
 
@@ -37,10 +38,24 @@ if (!pdfUrl) {
     console.log("PDF viewer loaded");
 }
 
-// Render page
+// Scale to fit container width (so full-screen and resize show correct size)
+function getScaleForPage(page) {
+  if (!pdfContainer) return 1.25;
+  const baseViewport = page.getViewport({ scale: 1 });
+  const containerWidth = pdfContainer.clientWidth || window.innerWidth;
+  const padding = 20;
+  const availableWidth = Math.max(containerWidth - padding, 100);
+  const scale = availableWidth / baseViewport.width;
+  const dpr = window.devicePixelRatio || 1;
+  return Math.min(scale, 3) * Math.min(dpr, 2); // cap scale for performance
+}
+
+// Render page (fits container; re-run on resize/fullscreen)
 function renderPage(pageNumber) {
+  if (!pdfDoc) return;
   pdfDoc.getPage(pageNumber).then(page => {
-    const viewport = page.getViewport({ scale: 1.25 });
+    const scale = getScaleForPage(page);
+    const viewport = page.getViewport({ scale });
 
     canvas.height = viewport.height;
     canvas.width = viewport.width;
@@ -85,6 +100,27 @@ function goToPage(page) {
 
 if (prevBtn) prevBtn.addEventListener("click", prevPage);
 if (nextBtn) nextBtn.addEventListener("click", nextPage);
+
+// Re-render when container size changes (full-screen, window resize, Unity WebView resize)
+function scheduleResizeRender() {
+  if (!pdfDoc) return;
+  if (window._resizeRenderTimer) clearTimeout(window._resizeRenderTimer);
+  window._resizeRenderTimer = setTimeout(() => {
+    renderPage(currentPage);
+    window._resizeRenderTimer = null;
+  }, 100);
+}
+
+if (pdfContainer) {
+  const ro = new ResizeObserver(scheduleResizeRender);
+  ro.observe(pdfContainer);
+}
+
+document.addEventListener("fullscreenchange", scheduleResizeRender);
+document.addEventListener("webkitfullscreenchange", scheduleResizeRender);
+document.addEventListener("mozfullscreenchange", scheduleResizeRender);
+document.addEventListener("MSFullscreenChange", scheduleResizeRender);
+window.addEventListener("resize", scheduleResizeRender);
 
 // Expose navigation for external callers (e.g., Unity)
 window.nextPage = nextPage;
