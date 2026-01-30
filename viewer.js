@@ -57,19 +57,93 @@ function renderPage(pageNumber) {
     const scale = getScaleForPage(page);
     const viewport = page.getViewport({ scale });
 
+    // resize canvas to match viewport
     canvas.height = viewport.height;
     canvas.width = viewport.width;
 
-    page.render({
+    // Reset any transforms on the 2D context so rendering is consistent
+    try {
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    } catch (e) {
+      // ignore if context not available yet
+    }
+
+    // Render and wait for completion so callers know when drawing finished
+    const renderTask = page.render({
       canvasContext: ctx,
       viewport: viewport
     });
 
-    currentPage = pageNumber;
-    updateUI();
-    notifyUnity("PAGE_CHANGED");
+    renderTask.promise.then(() => {
+      try { ctx.restore(); } catch (e) {}
+      currentPage = pageNumber;
+      updateUI();
+      notifyUnity("PAGE_CHANGED");
+      notifyUnity("PAGE_RENDERED");
+    }).catch(err => {
+      console.error('Render failed', err);
+      notifyUnity("PAGE_RENDER_FAILED");
+    });
   });
 }
+
+// Apply or clear vertical flip on the canvas (Vuplex/WebGL textures sometimes invert Y)
+function applyFlip(shouldFlip) {
+  if (!canvas) return;
+  if (shouldFlip) {
+    canvas.style.transform = 'scaleY(-1)';
+    canvas.style.webkitTransform = 'scaleY(-1)';
+  } else {
+    canvas.style.transform = '';
+    canvas.style.webkitTransform = '';
+  }
+  // Ensure context transform reset and re-render to get correct orientation
+  try { ctx.setTransform(1, 0, 0, 1, 0, 0); } catch (e) {}
+  scheduleResizeRender();
+}
+
+// External API for Unity/Vuplex to notify activation and optionally flip state
+window.setWebViewActive = function(active, flipped) {
+  if (typeof active === 'boolean') {
+    canvas.style.visibility = active ? 'visible' : 'hidden';
+  }
+  if (typeof flipped === 'boolean') applyFlip(flipped);
+  if (active) scheduleResizeRender();
+};
+
+// Listen for postMessage commands (Unity/Vuplex can call via postMessage)
+window.addEventListener('message', ev => {
+  const data = ev.data;
+  if (!data) return;
+  try {
+    // support either stringified JSON or object
+    const payload = typeof data === 'string' ? JSON.parse(data) : data;
+    if (payload.type === 'WEBVIEW_ACTIVE') {
+      window.setWebViewActive(Boolean(payload.active), payload.flipped);
+    }
+    if (payload.type === 'WEBVIEW_FLIP') {
+      applyFlip(Boolean(payload.flipped));
+    }
+    if (payload.type === 'RENDER_PAGE' && typeof payload.page === 'number') {
+      goToPage(payload.page);
+    }
+  } catch (e) {
+    // ignore malformed messages
+  }
+});
+
+// When the document regains visibility (e.g., activated by Unity/Vuplex), re-render
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    scheduleResizeRender();
+    canvas.style.visibility = 'visible';
+  }
+});
+
+// Also re-render on focus — some WebView implementations need this
+window.addEventListener('focus', () => scheduleResizeRender());
 
 // UI update
 function updateUI() {
