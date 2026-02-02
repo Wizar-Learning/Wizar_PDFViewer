@@ -6,6 +6,8 @@ const pdfUrl = params.get("pdf");
 let pdfDoc = null;
 let currentPage = 1;
 let totalPages = 0;
+let currentFlipState = false; // Track flip state to prevent unwanted flips
+let currentRenderTask = null; // track active PDF.js render task so we can cancel overlaps
 
 const canvas = document.getElementById("pdfCanvas");
 const ctx = canvas.getContext("2d");
@@ -14,6 +16,9 @@ const pageInfoEl = document.getElementById("pageInfo");
 const prevBtn = document.getElementById("prevBtn");
 const nextBtn = document.getElementById("nextBtn");
 const pdfContainer = document.getElementById("pdfContainer");
+// Ensure canvas has no transforms applied initially
+canvas.style.transform = 'none';
+canvas.style.webkitTransform = 'none';
 
 GlobalWorkerOptions.workerSrc = new URL("./pdf.worker.mjs", import.meta.url).toString();
 
@@ -55,35 +60,57 @@ function renderPage(pageNumber) {
   if (!pdfDoc) return;
   pdfDoc.getPage(pageNumber).then(page => {
     const scale = getScaleForPage(page);
-    const viewport = page.getViewport({ scale });
+    // Try getting viewport with explicit rotation to fix potential inversion
+    const viewport = page.getViewport({ scale, rotation: 0 });
+    
+  console.log('Rendering page', pageNumber);
+  console.log('Scale:', scale);
+  console.log('Viewport:', viewport);
 
     // resize canvas to match viewport
     canvas.height = viewport.height;
     canvas.width = viewport.width;
 
-    // Reset any transforms on the 2D context so rendering is consistent
-    try {
-      ctx.save();
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-    } catch (e) {
-      // ignore if context not available yet
+    // Get fresh context - PDF.js will handle rendering
+    const renderCtx = canvas.getContext("2d");
+
+    // If a previous render is still running, cancel it before starting a new one.
+    // This prevents the "Cannot use the same canvas during multiple render() operations" error
+    if (currentRenderTask && typeof currentRenderTask.cancel === 'function') {
+      try {
+        currentRenderTask.cancel();
+      } catch (e) {
+        // ignore cancel errors
+      }
+      currentRenderTask = null;
     }
 
     // Render and wait for completion so callers know when drawing finished
     const renderTask = page.render({
-      canvasContext: ctx,
+      canvasContext: renderCtx,
       viewport: viewport
     });
+    currentRenderTask = renderTask;
 
     renderTask.promise.then(() => {
-      try { ctx.restore(); } catch (e) {}
+      // Clear active task reference
+      currentRenderTask = null;
+      // Ensure no transforms are applied to canvas after rendering
+      canvas.style.transform = 'none';
+      canvas.style.webkitTransform = 'none';
       currentPage = pageNumber;
       updateUI();
       notifyUnity("PAGE_CHANGED");
       notifyUnity("PAGE_RENDERED");
     }).catch(err => {
+      // Ignore cancellations (common when we intentionally cancel previous renders)
+      if (err && err.name === 'RenderingCancelledException') {
+        console.log('Render cancelled');
+        currentRenderTask = null;
+        return;
+      }
       console.error('Render failed', err);
+      currentRenderTask = null;
       notifyUnity("PAGE_RENDER_FAILED");
     });
   });
@@ -91,16 +118,12 @@ function renderPage(pageNumber) {
 
 // Apply or clear vertical flip on the canvas (Vuplex/WebGL textures sometimes invert Y)
 function applyFlip(shouldFlip) {
+  // Force canvas to normal orientation regardless of requested flip.
+  // Some environments may send flipped=true by default; ignore it.
   if (!canvas) return;
-  if (shouldFlip) {
-    canvas.style.transform = 'scaleY(-1)';
-    canvas.style.webkitTransform = 'scaleY(-1)';
-  } else {
-    canvas.style.transform = '';
-    canvas.style.webkitTransform = '';
-  }
-  // Ensure context transform reset and re-render to get correct orientation
-  try { ctx.setTransform(1, 0, 0, 1, 0, 0); } catch (e) {}
+  currentFlipState = false;
+  canvas.style.transform = 'none';
+  canvas.style.webkitTransform = 'none';
   scheduleResizeRender();
 }
 
