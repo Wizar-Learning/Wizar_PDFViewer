@@ -48,12 +48,20 @@
       min-height: 0;
       display: flex;
       justify-content: center;
-      align-items: flex-start;
+      align-items: center;
       padding: 10px;
       overflow: auto;
+      background: #0a0f1a;
     }
 
     #pdfCanvas {
+      max-width: 100%;
+      max-height: 100%;
+      height: auto;
+      width: auto;
+      object-fit: contain;
+      display: block;
+      margin: 0 auto;
     }
   </style>
 </head>
