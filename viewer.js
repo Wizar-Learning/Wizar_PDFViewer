@@ -45,14 +45,23 @@ if (!pdfUrl) {
 
 // Scale to fit container width (so full-screen and resize show correct size)
 function getScaleForPage(page) {
-  if (!pdfContainer) return 1.25;
+  if (!pdfContainer) return 1.0;
   const baseViewport = page.getViewport({ scale: 1 });
   const containerWidth = pdfContainer.clientWidth || window.innerWidth;
+  const containerHeight = pdfContainer.clientHeight || window.innerHeight;
   const padding = 20;
   const availableWidth = Math.max(containerWidth - padding, 100);
-  const scale = availableWidth / baseViewport.width;
-  const dpr = window.devicePixelRatio || 1;
-  return Math.min(scale, 3) * Math.min(dpr, 2); // cap scale for performance
+  const availableHeight = Math.max(containerHeight - padding, 100);
+  
+  // Calculate scale based on both width and height to fit properly
+  const scaleWidth = availableWidth / baseViewport.width;
+  const scaleHeight = availableHeight / baseViewport.height;
+  
+  // Use the smaller scale to ensure the entire page fits
+  const scale = Math.min(scaleWidth, scaleHeight);
+  
+  // Cap scale for performance but don't multiply by DPR for canvas rendering
+  return Math.min(scale, 3);
 }
 
 // Render page (fits container; re-run on resize/fullscreen)
